@@ -1,0 +1,7 @@
+node_modules/
+prisma/*.db
+prisma/*.db-wal
+prisma/*.db-shm
+.env
+*.log
+.DS_Store
