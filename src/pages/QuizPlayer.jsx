@@ -1,0 +1,24 @@
+import React, { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { AppShell } from "../components/AppShell.jsx";
+import { LoadingPage } from "../components/Spinner.jsx";
+import { ErrorState } from "../components/States.jsx";
+import { useToast } from "../components/Toaster.jsx";
+export default function QuizPlayerPage() {
+  const { id } = useParams(); const { showToast } = useToast();
+  const [quiz, setQuiz] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(false);
+  const [answers, setAnswers] = useState({}); const [submitted, setSubmitted] = useState(false); const [saving, setSaving] = useState(false);
+  useEffect(() => { fetch(`/api/quiz/${id}`).then((r)=>r.json()).then((d)=>{if(d.error)throw new Error();setQuiz(d.quiz);if(d.quiz.score!==null)setSubmitted(true);}).catch(()=>setError(true)).finally(()=>setLoading(false)); }, [id]);
+  const allAnswered = quiz?quiz.questions.every((_,i)=>answers[i]!==undefined):false;
+  const handleSubmit = async () => { if(!quiz||!allAnswered) return; setSaving(true); const score=quiz.questions.reduce((a,q,i)=>answers[i]===q.correctIndex?a+1:a,0); const pct=Math.round((score/quiz.questions.length)*100); try { await fetch(`/api/quiz/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({score:pct})}); setSubmitted(true); setQuiz({...quiz,score:pct}); showToast(`You scored ${pct}%!`,pct>=70?"success":"info"); } catch { showToast("Failed to save","error"); } finally { setSaving(false); } };
+  const handleRetake = () => { setAnswers({}); setSubmitted(false); };
+  if (loading) return <AppShell><LoadingPage /></AppShell>;
+  if (error||!quiz) return <AppShell><ErrorState /></AppShell>;
+  const score=quiz.questions.reduce((a,q,i)=>answers[i]===q.correctIndex?a+1:a,0);
+  return (<AppShell><div className="max-w-2xl mx-auto space-y-6">
+    <div><Link to="/quizzes" className="text-sm text-gray-500 hover:underline">← Back to Quizzes</Link><h1 className="text-2xl font-bold text-gray-900 mt-2">{quiz.title}</h1>{quiz.subjectName&&<div className="flex items-center gap-2 mt-1 text-sm"><span className="w-3 h-3 rounded-full" style={{background:quiz.subjectColor||"#6366f1"}} /><span className="text-gray-500">{quiz.subjectName} {quiz.topicName&&`→ ${quiz.topicName}`}</span></div>}</div>
+    {submitted&&quiz.score!==null&&<div className={`rounded-xl border p-5 text-center ${quiz.score>=70?"bg-green-50 border-green-100":"bg-amber-50 border-amber-100"}`}><div className="text-4xl mb-2">{quiz.score>=70?"🎉":"💪"}</div><p className="text-3xl font-bold text-gray-900">{quiz.score}%</p><p className="text-sm text-gray-600 mt-1">You got {score} out of {quiz.questions.length} correct</p><button onClick={handleRetake} className="mt-4 px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 text-sm">Retake Quiz</button></div>}
+    <div className="space-y-4">{quiz.questions.map((q,qi)=>{const ua=answers[qi];return(<div key={qi} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5"><p className="font-medium text-gray-900 mb-3">{qi+1}. {q.question}</p><div className="space-y-2">{q.options.map((opt,oi)=>{const sel=ua===oi;const corr=q.correctIndex===oi;let cls="border-gray-200 hover:bg-gray-50";if(submitted){if(corr)cls="border-green-500 bg-green-50";else if(sel&&!corr)cls="border-red-500 bg-red-50";}else if(sel)cls="border-indigo-500 bg-indigo-50";return(<button key={oi} onClick={()=>!submitted&&setAnswers({...answers,[qi]:oi})} disabled={submitted} className={`w-full text-left p-3 rounded-lg border-2 transition-all flex items-center gap-3 ${cls}`}><span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold flex-shrink-0 ${sel||(submitted&&corr)?submitted?corr?"bg-green-500 border-green-500 text-white":"bg-red-500 border-red-500 text-white":"bg-indigo-500 border-indigo-500 text-white":"border-gray-300"}`}>{String.fromCharCode(65+oi)}</span><span className="text-sm text-gray-700">{opt}</span>{submitted&&corr&&<span className="ml-auto text-green-600">✓</span>}{submitted&&sel&&!corr&&<span className="ml-auto text-red-500">✗</span>}</button>);})}</div>{submitted&&<div className="mt-3 p-3 rounded-lg bg-blue-50 border border-blue-100"><p className="text-xs font-medium text-blue-700 mb-1">💡 Explanation</p><p className="text-sm text-blue-900">{q.explanation}</p></div>}</div>);})}</div>
+    {!submitted&&<div className="flex items-center justify-between"><p className="text-sm text-gray-500">{Object.keys(answers).length} / {quiz.questions.length} answered</p><button onClick={handleSubmit} className="px-4 py-2 rounded-lg font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50" disabled={!allAnswered||saving}>{saving?"Saving...":"Submit Quiz"}</button></div>}
+  </div></AppShell>);
+}
